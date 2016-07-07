@@ -115,7 +115,7 @@ int main(int argc, char **argv)
     bool loop = true;
     while( loop )
     {
-        int key = waitKey(0);
+        char key = (char)waitKey(0);
         if( key == 27 )
         {
             loop = false;

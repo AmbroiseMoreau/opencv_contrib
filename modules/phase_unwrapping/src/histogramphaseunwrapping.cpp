@@ -246,7 +246,9 @@ void HistogramPhaseUnwrapping_Impl::Pixel::setIncrement( int inc )
 {
     increment = inc;
 }
-
+/* When a pixel of a non-single group is added to an other non-single group, we need to add a new
+increment to the one that was there previously and that was already removing some wraps.
+*/
 void HistogramPhaseUnwrapping_Impl::Pixel::changeIncrement( int inc )
 {
     increment += inc;
@@ -341,7 +343,7 @@ void HistogramPhaseUnwrapping_Impl::Histogram::createBins( float t, int nbrOfBin
         addBin(HistogramBin(thresh + i * largeWidth, thresh + ( i + 1 ) * largeWidth));
     }
 }
-
+// Add a bin b to the histogram
 void HistogramPhaseUnwrapping_Impl::Histogram::addBin( HistogramBin b )
 {
     bins.push_back(b);
@@ -378,7 +380,9 @@ std::vector<HistogramPhaseUnwrapping_Impl::Edge> HistogramPhaseUnwrapping_Impl::
     temp = bins[binIndex].getEdges();
     return temp;
 }
-// Methods in which reliabilities are computed and edges are sorted in the histogram.
+/* Method in which reliabilities are computed and edges are sorted in the histogram.
+Increments are computed for each pixels.
+ */
 void HistogramPhaseUnwrapping_Impl::unwrapPhaseMap( InputArray wrappedPhaseMap,
                                                     OutputArray unwrappedPhaseMap,
                                                     InputArray shadowMask )
@@ -486,7 +490,7 @@ void HistogramPhaseUnwrapping_Impl::computePixelsReliability( InputArray wrapped
                     }
                 }
             }
-            else
+            else // pixel is not in a valid region. It's inverse reliability is set to the maximum
             {
                 idx = i * cols + j;
                 valid = false;
@@ -506,7 +510,9 @@ void HistogramPhaseUnwrapping_Impl::computeEdgesReliabilityAndCreateHistogram()
     int col;
     histogram.createBins(params.histThresh, params.nbrOfSmallBins, params.nbrOfLargeBins);
     int nbrOfPixels = static_cast<int>(pixels.size());
-
+    /* Edges are built by considering a pixel and it's right-neighbour and lower-neighbour.
+     We discard non-valid pixels here.
+     */
     for( int i = 0; i < nbrOfPixels; ++i )
     {
         if( pixels[i].getValidity() )
@@ -517,8 +523,8 @@ void HistogramPhaseUnwrapping_Impl::computeEdgesReliabilityAndCreateHistogram()
             if( row != params.height - 1 && col != params.width -1 )
             {
                 int idxRight, idxDown;
-                idxRight = row * params.width + col + 1;
-                idxDown = ( row + 1 ) * params.width + col;
+                idxRight = row * params.width + col + 1; // Pixel to the right
+                idxDown = ( row + 1 ) * params.width + col; // Pixel under pixel i.
                 createAndSortEdge(i, idxRight);
                 createAndSortEdge(i, idxDown);
             }
@@ -568,6 +574,10 @@ void HistogramPhaseUnwrapping_Impl::unwrapHistogram()
 {
     int nbrOfPixels = static_cast<int>(pixels.size());
     int nbrOfBins = histogram.getNbrOfBins();
+    /* This vector is used to keep track of the number of pixels in each group and avoid useless group.
+       For example, if lastPixelAddedToGroup[10] is equal to 5, it means that pixel "5" was the last one
+       to be added to group 10. So, pixel "5" is the only one that has the correct value for parameter
+       "numberOfPixelsInGroup" in order to avoid a loop on all the pixels to update this number*/
     std::vector<int> lastPixelAddedToGroup(nbrOfPixels, 0);
     for( int i = 0; i < nbrOfBins; ++i )
     {
@@ -579,19 +589,19 @@ void HistogramPhaseUnwrapping_Impl::unwrapHistogram()
 
             int pOneId = currentEdges[j].getPixOneId();
             int pTwoId = currentEdges[j].getPixTwoId();
-
+            // Both pixels are in a single group.
             if( pixels[pOneId].getSinglePixelGroup() && pixels[pTwoId].getSinglePixelGroup() )
             {
                 float invRel1 = pixels[pOneId].getInverseReliability();
                 float invRel2 = pixels[pTwoId].getInverseReliability();
-
+                // Quality of pixel 2 is better than that of pixel 1 -> pixel 1 is added to group 2
                 if( invRel1 >= invRel2 )
                 {
                     int newGroupId = pixels[pTwoId].getGroupId();
                     int newInc = pixels[pTwoId].getIncrement() + currentEdges[j].getIncrement();
                     pixels[pOneId].setGroupId(newGroupId);
                     pixels[pOneId].setIncrement(newInc);
-                    lastPixelAddedToGroup[newGroupId] = pOneId;
+                    lastPixelAddedToGroup[newGroupId] = pOneId; // Pixel 1 is the last one to be added to group 2
                 }
                 else
                 {

@@ -39,12 +39,17 @@
  //
  //M*/
 
-#include <opencv2/imgproc.hpp>
-#include <opencv2/highgui.hpp>
-#include <opencv2/structured_light.hpp>
+#include "opencv2/opencv.hpp"
+#include <opencv/highgui.h>
+#include <vector>
 #include <iostream>
 #include <fstream>
-#include <stdio.h>
+#include <opencv2/core.hpp>
+#include <opencv2/core/utility.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/calib3d.hpp>
+#include <opencv2/structured_light.hpp>
+
 
 using namespace cv;
 using namespace std;
@@ -93,8 +98,37 @@ int main(int argc, char **argv)
     vector<Mat> patterns;
     Mat shadowMask;
 
+    VideoCapture cap(CV_CAP_PVAPI);
+    if(!cap.isOpened())
+    {
+        cout << "Camera could not be opened" << endl;
+        return -1;
+    }
+    cap.set(CAP_PROP_PVAPI_PIXELFORMAT, CAP_PVAPI_PIXELFORMAT_MONO8);
+
+
     // Generate sinusoidal patterns
     sinus->generate(patterns);
+
+    namedWindow("pattern", WINDOW_NORMAL);
+    setWindowProperty("pattern", CV_WND_PROP_FULLSCREEN, CV_WINDOW_FULLSCREEN);
+    imshow("pattern", patterns[0]);
+    cout << "Press any key when ready" << endl;
+    waitKey(0);
+    int nbrOfImages = 30;
+    int count = 0;
+    Mat frame, gray;
+    vector<Mat> img(nbrOfImages);
+    while( count < nbrOfImages )
+    {
+        for(int i = 0; i < (int)patterns.size(); ++i)
+        {
+            imshow("pattern", patterns[i]);
+            waitKey(30);
+            cap >> img[count];
+            count += 1;
+        }
+    }
     Mat phaseMap, phaseMap8;
     // Compute wrapped phase map
     sinus->computePhaseMap(patterns, phaseMap, shadowMask);
@@ -114,7 +148,7 @@ int main(int argc, char **argv)
     bool loop = true;
     while( loop )
     {
-        int key = waitKey(0);
+        char key = (char) waitKey(0);
         if( key == 27 )
         {
             loop = false;
