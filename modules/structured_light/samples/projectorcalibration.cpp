@@ -39,8 +39,7 @@
  //
  //M*/
 
-#include "opencv2/opencv.hpp"
-#include <opencv/highgui.h>
+#include <opencv2/highgui.hpp>
 #include <vector>
 #include <iostream>
 #include <fstream>
@@ -95,7 +94,7 @@ void fromCamToWorld( Mat cameraMatrix, vector<Mat> rV, vector<Mat> tV,
 
 int main( int argc, char **argv )
 {
-    VideoCapture cap(CV_CAP_PVAPI);
+    VideoCapture cap(CAP_PVAPI);
     Mat frame;
     Mat gray;
 
@@ -143,7 +142,7 @@ int main( int argc, char **argv )
     cap.set(CAP_PROP_PVAPI_PIXELFORMAT, CAP_PVAPI_PIXELFORMAT_MONO8);
 
     namedWindow("pattern", WINDOW_NORMAL);
-    setWindowProperty("pattern", CV_WND_PROP_FULLSCREEN, CV_WINDOW_FULLSCREEN);
+    setWindowProperty("pattern", WND_PROP_FULLSCREEN, WINDOW_FULLSCREEN);
 
     namedWindow("camera view", WINDOW_NORMAL);
 
@@ -182,10 +181,10 @@ int main( int argc, char **argv )
                     cout << "found pattern" << endl;
                     Mat projCorners, camCorners;
                     cornerSubPix(gray, camPointBuf, camSettings.subpixelSize, Size(-1, -1),
-                            TermCriteria(CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 30, 0.1));
+                            TermCriteria(TermCriteria::COUNT + TermCriteria::EPS, 30, 0.1));
 
                     cornerSubPix(gray, projPointBuf, projSettings.subpixelSize, Size(-1, -1),
-                            TermCriteria(CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 30, 0.1));
+                            TermCriteria(TermCriteria::COUNT + TermCriteria::EPS, 30, 0.1));
 
                     drawChessboardCorners(frame, camSettings.patternSize, camPointBuf, foundCam);
                     drawChessboardCorners(frame, projSettings.patternSize, projPointBuf, foundProj);
@@ -267,8 +266,7 @@ float calibrate( vector< vector<Point3f> > objPoints, vector< vector<Point2f> > 
     int calibFlags = 0;
 
     float rms = calibrateCamera(objPoints, imgPoints, imgSize, cameraMatrix,
-                                distCoeffs, r, t, calibFlags,
-                                TermCriteria(CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 30, 0.1));
+                                distCoeffs, r, t, calibFlags);
 
     return rms;
 }

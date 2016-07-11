@@ -39,8 +39,7 @@
  //
  //M*/
 
-#include "opencv2/opencv.hpp"
-#include <opencv/highgui.h>
+#include <opencv2/highgui.hpp>
 #include <vector>
 #include <iostream>
 #include <fstream>
@@ -79,7 +78,6 @@ int main(int argc, char **argv)
         return -1;
     }
     structured_light::SinusoidalPattern::Params params;
-
     // Retrieve parameters written in the command line
     CommandLineParser parser(argc, argv, keys);
     params.width = parser.get<int>(0);
@@ -98,7 +96,7 @@ int main(int argc, char **argv)
     vector<Mat> patterns;
     Mat shadowMask;
 
-    VideoCapture cap(CV_CAP_PVAPI);
+    VideoCapture cap(CAP_PVAPI);
     if(!cap.isOpened())
     {
         cout << "Camera could not be opened" << endl;
@@ -111,7 +109,7 @@ int main(int argc, char **argv)
     sinus->generate(patterns);
 
     namedWindow("pattern", WINDOW_NORMAL);
-    setWindowProperty("pattern", CV_WND_PROP_FULLSCREEN, CV_WINDOW_FULLSCREEN);
+    setWindowProperty("pattern", WND_PROP_FULLSCREEN, WINDOW_FULLSCREEN);
     imshow("pattern", patterns[0]);
     cout << "Press any key when ready" << endl;
     waitKey(0);
