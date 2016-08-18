@@ -100,8 +100,8 @@ int main(int argc, char **argv)
 
     vector<Mat> patterns;
     Mat shadowMask;
-    Mat wrappedPhaseMap, wrappedPhaseMap8;
     Mat unwrappedPhaseMap, unwrappedPhaseMap8;
+    Mat wrappedPhaseMap, wrappedPhaseMap8;
     //Generate sinusoidal patterns
     sinus->generate(patterns);
 
@@ -123,7 +123,6 @@ int main(int argc, char **argv)
     int count = 0;
 
     vector<Mat> img(nbrOfImages);
-    Mat phaseMap, phaseMap8;
     Size camSize(-1, -1);
 
     while( count < nbrOfImages )
@@ -131,7 +130,7 @@ int main(int argc, char **argv)
         for(int i = 0; i < (int)patterns.size(); ++i )
         {
             imshow("pattern", patterns[i]);
-            waitKey(100);
+            waitKey(30);
             cap >> img[count];
             count += 1;
         }
@@ -153,24 +152,15 @@ int main(int argc, char **argv)
         case structured_light::FTP:
             for( int i = 0; i < nbrOfImages; ++i )
             {
-                vector<Mat> captures;
+                sinus->computePhaseMap(img[i], wrappedPhaseMap, shadowMask);
                 if( camSize.height == -1 )
                 {
                     camSize.height = img[i].rows;
                     camSize.width = img[i].cols;
                 }
-                captures.push_back(img[i]);
-
-                if( i < nbrOfImages - 2 )
-                {
-                    captures.push_back(img[i+1]);
-                    captures.push_back(img[i+2]);
-                }
-
-                sinus->computePhaseMap(captures, phaseMap, shadowMask);
-                sinus->unwrapPhaseMap(phaseMap, unwrappedPhaseMap, camSize, shadowMask);
+                sinus->unwrapPhaseMap(wrappedPhaseMap, unwrappedPhaseMap, camSize, shadowMask);
                 unwrappedPhaseMap.convertTo(unwrappedPhaseMap8, CV_8U, 1, 128);
-                phaseMap.convertTo(phaseMap8, CV_8U, 255, 128);
+                wrappedPhaseMap.convertTo(wrappedPhaseMap8, CV_8U, 255, 128);
 
                 if( !outputUnwrappedPhasePath.empty() )
                 {
@@ -188,68 +178,43 @@ int main(int argc, char **argv)
             }
             break;
         case structured_light::PSP:
+        case structured_light::FAPS:
             for( int i = 0; i < nbrOfImages - 2; ++i )
             {
                 vector<Mat> captures;
+                captures.push_back(img[i]);
+                captures.push_back(img[i+1]);
+                captures.push_back(img[i+2]);
+
+                sinus->computePhaseMap(captures, wrappedPhaseMap, shadowMask);
+
                 if( camSize.height == -1 )
                 {
                     camSize.height = img[i].rows;
                     camSize.width = img[i].cols;
                 }
-                captures.push_back(img[i]);
-                captures.push_back(img[i+1]);
-                captures.push_back(img[i+2]);
-
-                sinus->computePhaseMap(captures, phaseMap, shadowMask);
-                sinus->unwrapPhaseMap(phaseMap, unwrappedPhaseMap, camSize, shadowMask);
+                sinus->unwrapPhaseMap(wrappedPhaseMap, unwrappedPhaseMap, camSize, shadowMask);
                 unwrappedPhaseMap.convertTo(unwrappedPhaseMap8, CV_8U, 1, 128);
-                phaseMap.convertTo(phaseMap8, CV_8U, 255, 128);
+                wrappedPhaseMap.convertTo(wrappedPhaseMap8, CV_8U, 255, 128);
 
                 if( !outputUnwrappedPhasePath.empty() )
                 {
                     ostringstream name;
                     name << i;
-                    imwrite(outputUnwrappedPhasePath + "_PSP_" + name.str() + ".png", unwrappedPhaseMap8);
+                    if( params.methodId == structured_light::PSP )
+                        imwrite(outputUnwrappedPhasePath + "_PSP_" + name.str() + ".png", unwrappedPhaseMap8);
+                    else
+                        imwrite(outputUnwrappedPhasePath + "_FAPS_" + name.str() + ".png", unwrappedPhaseMap8);
                 }
 
                 if( !outputWrappedPhasePath.empty() )
                 {
                     ostringstream name;
                     name << i;
-                    imwrite(outputWrappedPhasePath + "_PSP_" + name.str() + ".png", wrappedPhaseMap8);
-                }
-            }
-            break;
-        case structured_light::FAPS:
-            for( int i = 0; i < nbrOfImages - 2; ++ i )
-            {
-                vector<Mat> captures;
-                if( camSize.height == -1 )
-                {
-                    camSize.height = img[i].rows;
-                    camSize.width = img[i].cols;
-                }
-                captures.push_back(img[i]);
-                captures.push_back(img[i+1]);
-                captures.push_back(img[i+2]);
-
-                sinus->computePhaseMap(captures, phaseMap, shadowMask);
-                sinus->unwrapPhaseMap(phaseMap, unwrappedPhaseMap, camSize, shadowMask);
-                unwrappedPhaseMap.convertTo(unwrappedPhaseMap8, CV_8U, 1, 128);
-                phaseMap.convertTo(phaseMap8, CV_8U, 255, 128);
-
-                if( !outputUnwrappedPhasePath.empty() )
-                {
-                    ostringstream name;
-                    name << i;
-                    imwrite(outputUnwrappedPhasePath + "_FAPS_" + name.str() + ".png", unwrappedPhaseMap8);
-                }
-
-                if( !outputWrappedPhasePath.empty() )
-                {
-                    ostringstream name;
-                    name << i;
-                    imwrite(outputWrappedPhasePath + "_FAPS_" + name.str() + ".png", wrappedPhaseMap8);
+                    if( params.methodId == structured_light::PSP )
+                        imwrite(outputWrappedPhasePath + "_PSP_" + name.str() + ".png", wrappedPhaseMap8);
+                    else
+                        imwrite(outputWrappedPhasePath + "_FAPS_" + name.str() + ".png", wrappedPhaseMap8);
                 }
             }
             break;

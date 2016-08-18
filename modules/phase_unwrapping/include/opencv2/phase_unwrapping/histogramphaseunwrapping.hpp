@@ -60,7 +60,7 @@ namespace phase_unwrapping {
      * two pixels connected through it. Edges are sorted in a histogram based on their reliability values.
      * This histogram is then used to unwrap pixels, starting from the highest quality pixel.
 
-     * The wrapped phase map and the unwrapped result are CV_32FC1 Mat.
+     * The wrapped phase map and the unwrapped result are stored in CV_32FC1 Mat.
      */
 class CV_EXPORTS_W HistogramPhaseUnwrapping : public PhaseUnwrapping
 {

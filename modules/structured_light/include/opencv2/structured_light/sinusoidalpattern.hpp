@@ -77,6 +77,7 @@ public:
      * @param methodId Allow to choose between FTP, PSP and FAPS.
      * @param nbrOfPixelsBetweenMarkers Number of pixels between two consecutive markers on the same row.
      * @param setMarkers Allow to set markers on the patterns.
+     * @param markersLocation vector used to store markers location on the patterns.
      */
     struct CV_EXPORTS Params
     {
@@ -103,6 +104,7 @@ public:
      * @param patternImages Input data to compute the wrapped phase map.
      * @param wrappedPhaseMap Wrapped phase map obtained through one of the three methods.
      * @param shadowMask Mask used to discard shadow regions.
+     * @param fundamental Fundamental matrix used to compute epipolar lines and ease the matching step.
      */
     CV_WRAP
     virtual void computePhaseMap( InputArrayOfArrays patternImages,
@@ -113,6 +115,8 @@ public:
      * @brief Unwrap the wrapped phase map to remove phase ambiguities.
      * @param wrappedPhaseMap The wrapped phase map computed from the pattern.
      * @param unwrappedPhaseMap The unwrapped phase map used to find correspondences between the two devices.
+     * @param camSize Resolution of the camera.
+     * @param shadowMask Mask used to discard shadow regions.
      */
     CV_WRAP
     virtual void unwrapPhaseMap( InputArrayOfArrays wrappedPhaseMap,
@@ -129,6 +133,12 @@ public:
     virtual void findProCamMatches( InputArray projUnwrappedPhaseMap, InputArray camUnwrappedPhaseMap,
                                     OutputArrayOfArrays matches ) = 0;
 
+    /**
+     * @brief compute the data modulation term.
+     * @param patternImages captured images with projected patterns.
+     * @param dataModulationTerm Mat where the data modulation term is saved.
+     * @param shadowMask Mask used to discard shadow regions.
+     */
     CV_WRAP
     virtual void computeDataModulationTerm( InputArrayOfArrays patternImages,
                                             OutputArray dataModulationTerm,

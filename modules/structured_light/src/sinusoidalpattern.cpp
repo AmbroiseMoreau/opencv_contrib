@@ -712,7 +712,7 @@ void SinusoidalPatternProfilometry_Impl::computeShadowMask( InputArrayOfArrays p
     threshold(mean, shadowMask_, 10, 255, 0);
 
 }
-
+// Compute the data modulation term according to the formula given in the reference paper
 void SinusoidalPatternProfilometry_Impl::computeDataModulationTerm( InputArrayOfArrays patternImages,
                                                                     OutputArray dataModulationTerm,
                                                                     InputArray shadowMask )
@@ -781,7 +781,7 @@ void SinusoidalPatternProfilometry_Impl::computeDataModulationTerm( InputArrayOf
     threshold(dmt, threshedDmt, 0.4, 1, THRESH_BINARY);
     threshedDmt.convertTo(dataModulationTerm_, CV_8UC1, 255, 0);
 }
-
+//Extract marker location on the DMT. Duplicates are removed
 void SinusoidalPatternProfilometry_Impl::extractMarkersLocation( InputArray dataModulationTerm,
                                                                  std::vector<Point> &markersLocation )
 {

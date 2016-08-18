@@ -56,7 +56,6 @@ static const char* keys =
 {
     "{@inputPath | | Path of the wrapped phase map saved in a yaml file }"
     "{@outputUnwrappedName | | Path of the unwrapped phase map to be saved in a yaml file and as an 8 bit png}"
-    "{@outputWrappedName | | Path to save the wrapped phase map as an 8 bit png image}"
 };
 
 static void help()
@@ -66,7 +65,7 @@ static void help()
             " The mat name in the file should be \"phaseValue\". The result is saved in a yaml file"
             " too. Two images (wrapped.png and output_name.png) are also created"
             " for visualization purpose."
-            "\nTo call: ./example_phase_unwrapping_unwrap <input_path> <output_unwrapped_name> <output_wrapped_name> \n"
+            "\nTo call: ./example_phase_unwrapping_unwrap <input_path> <output_unwrapped_name> \n"
          << endl;
 }
 int main(int argc, char **argv)
@@ -76,7 +75,6 @@ int main(int argc, char **argv)
     CommandLineParser parser(argc, argv, keys);
     String inputPath = parser.get<String>(0);
     String outputUnwrappedName = parser.get<String>(1);
-    String outputWrappedName = parser.get<String>(2);
 
     if( inputPath.empty() || outputUnwrappedName.empty() )
     {
@@ -111,10 +109,6 @@ int main(int argc, char **argv)
     imshow("wrapped phase map", wPhaseMap8);
     imshow("unwrapped phase map", uPhaseMap8);
 
-    if( !outputWrappedName.empty() )
-    {
-        imwrite(outputWrappedName + ".png", wPhaseMap8);
-    }
     imwrite(outputUnwrappedName + ".png", uPhaseMap8);
     imwrite("reliabilities.png", reliabilities8);
 
