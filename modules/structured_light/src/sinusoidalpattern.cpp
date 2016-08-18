@@ -62,12 +62,20 @@ public:
 
     // Compute a wrapped phase map from the sinusoidal patterns
     void computePhaseMap( InputArrayOfArrays patternImages, OutputArray wrappedPhaseMap,
-                         OutputArray shadowMask = noArray() );
+                         OutputArray shadowMask = noArray(), InputArray fundamental = noArray());
     // Unwrap the wrapped phase map to retrieve correspondences
-    void unwrapPhaseMap( InputArray wrappedPhaseMap, OutputArray unwrappedPhaseMap );
+    void unwrapPhaseMap( InputArray wrappedPhaseMap,
+                         OutputArray unwrappedPhaseMap,
+                         cv::Size camSize,
+                         InputArray shadowMask = noArray() );
     // Find correspondences between the devices
     void findProCamMatches( InputArray projUnwrappedPhaseMap, InputArray camUnwrappedPhaseMap,
                             OutputArrayOfArrays matches );
+
+    void computeDataModulationTerm( InputArrayOfArrays patternImages,
+                                    OutputArray dataModulationTerm,
+                                    InputArray shadowMask );
+
 
 private:
     // Compute The Fourier transform of a pattern. Output is complex. Taken from the DFT example in OpenCV
@@ -90,13 +98,24 @@ private:
                                   Point &maxPosition2 );
     // Compute phase map from the three sinusoidal patterns
     void computePsPhaseMap( InputArrayOfArrays patternImages, OutputArray wrappedPhaseMap );
+
+    void computeFapsPhaseMap( InputArray h, InputArray theta1,
+                              InputArray theta2, OutputArray wrappedPhaseMap );
     // Compute a shadow mask to discard shadow regions
     void computeShadowMask( InputArrayOfArrays patternImages, OutputArray shadowMask );
     // Data modulation term is used to isolate cross markers
-    void computeDataModulationTerm( InputArrayOfArrays patternImages,
-                                    OutputArray dataModulationTerm );
+
+    void extractMarkersLocation( InputArray dataModulationTerm,
+                                 std::vector<Point> &markersLocation );
+
+    void convertToAbsolutePhaseMap( InputArrayOfArrays camPatterns,
+                                    InputArray unwrappedProjPhaseMap,
+                                    InputArray unwrappedCamPhaseMap,
+                                    InputArray shadowMask,
+                                    InputArray fundamentalMatrix );
 
     Params params;
+    phase_unwrapping::HistogramPhaseUnwrapping::Params unwrappingParams;
     // Class describing markers that are added to the patterns
     class Marker{
     private:
@@ -222,6 +241,8 @@ bool SinusoidalPatternProfilometry_Impl::generate( OutputArrayOfArrays pattern )
                     Marker mark(Point(firstMarkerOffset + k * m + j * mnRatio,
                             3 * period / 4 + j * period + i * period * n  - i * period / 3));
                     mark.drawMarker(pattern_[i]);
+                    params.markersLocation.push_back(Point2f(firstMarkerOffset + k * m + j * mnRatio,
+                            3 * period / 4 + j * period + i * period * n  - i * period / 3));
                 }
             }
         }
@@ -248,8 +269,9 @@ bool SinusoidalPatternProfilometry_Impl::decode( InputArrayOfArrays patternImage
 }
 // Most of the steps described in the paper to get the wrapped phase map take place here
 void SinusoidalPatternProfilometry_Impl::computePhaseMap( InputArrayOfArrays patternImages,
-                                                         OutputArray wrappedPhaseMap,
-                                                         OutputArray shadowMask )
+                                                          OutputArray wrappedPhaseMap,
+                                                          OutputArray shadowMask,
+                                                          InputArray fundamental  )
 {
     std::vector<Mat> &pattern_ = *(std::vector<Mat>*) patternImages.getObj();
     Mat &wrappedPhaseMap_ = *(Mat*) wrappedPhaseMap.getObj();
@@ -282,6 +304,9 @@ void SinusoidalPatternProfilometry_Impl::computePhaseMap( InputArrayOfArrays pat
     else if( params.methodId == PSP )
     {
         Mat &shadowMask_ = *(Mat*) shadowMask.getObj();
+        //Mat &fundamental_ = *(Mat*) fundamental.getObj();
+        (void) fundamental;
+        Mat dmt;
         int nbrOfPatterns = static_cast<int>(pattern_.size());
         std::vector<Mat> filteredPatterns(nbrOfPatterns);
         std::vector<Mat> dftImages(nbrOfPatterns);
@@ -307,14 +332,86 @@ void SinusoidalPatternProfilometry_Impl::computePhaseMap( InputArrayOfArrays pat
         }
         computePsPhaseMap(filteredPatterns, wrappedPhaseMap_);
     }
+    else if( params.methodId == FAPS )
+    {
+        Mat &shadowMask_ = *(Mat*) shadowMask.getObj();
+        int nbrOfPatterns = static_cast<int>(pattern_.size());
+        std::vector<Mat> unwrappedFTPhaseMaps;
+        std::vector<Mat> filteredPatterns(nbrOfPatterns);
+        Mat dmt;
+        Mat theta1, theta2, h;
+        std::vector<Point> markersLoc;
+        cv::Size camSize;
+        camSize.height = pattern_[0].rows;
+        camSize.width = pattern_[0].cols;
+        computeShadowMask(pattern_, shadowMask_);
 
+        for( int i = 0; i < nbrOfPatterns; ++i )
+        {
+            Mat dftImage, complexInverseDft;
+            Mat dftMag;
+            Mat tempWrappedPhaseMap;
+            Mat tempUnwrappedPhaseMap;
+            int halfWidth = cols/2;
+            int halfHeight = rows/2;
+            Point m1, m2;
+
+            computeDft(pattern_[i], dftImage); //compute the complex pattern DFT
+            swapQuadrants(dftImage, halfWidth, halfHeight); //swap quadrants to get 0 frequency in (halfWidth, halfHeight)
+            frequencyFiltering(dftImage, halfHeight, halfWidth, dcHeight, dcWidth, false); //get rid of 0 frequency
+            computeDftMagnitude(dftImage, dftMag); //compute magnitude to find maxima
+            findMaxInHalvesTransform(dftMag, m1, m2); //look for maxima in the magnitude. Useful information is located around maxima
+            frequencyFiltering(dftImage, m2.y, m2.x, bpHeight, bpWidth, true); //keep useful information only
+            swapQuadrants(dftImage,halfWidth, halfHeight); //swap quadrants again to compute inverse dft
+            computeInverseDft(dftImage, complexInverseDft, false); //compute inverse dft. Result is complex since we only keep half of the spectrum
+            computeFtPhaseMap(complexInverseDft, tempWrappedPhaseMap); //compute phaseMap from the complex image.
+            unwrapPhaseMap(tempWrappedPhaseMap, tempUnwrappedPhaseMap, camSize, shadowMask);
+            unwrappedFTPhaseMaps.push_back(tempUnwrappedPhaseMap);
+            computeInverseDft(dftImage, filteredPatterns[i], true);
+        }
+
+        theta1.create(camSize.height, camSize.width, unwrappedFTPhaseMaps[0].type());
+        theta2.create(camSize.height, camSize.width, unwrappedFTPhaseMaps[0].type());
+        h.create(camSize.height, camSize.width, CV_32FC1);
+
+        h = ( filteredPatterns[1] - filteredPatterns[2] ) / ( filteredPatterns[0] - filteredPatterns[1] );
+
+        theta1 = unwrappedFTPhaseMaps[1] - unwrappedFTPhaseMaps[0];
+        theta2 = unwrappedFTPhaseMaps[2] - unwrappedFTPhaseMaps[1];
+
+        computeFapsPhaseMap(h, theta1, theta2, wrappedPhaseMap_);
+    }
 }
 
 void SinusoidalPatternProfilometry_Impl::unwrapPhaseMap( InputArray wrappedPhaseMap,
-                                                         OutputArray unwrappedPhaseMap )
+                                                         OutputArray unwrappedPhaseMap,
+                                                         cv::Size camSize,
+                                                         InputArray shadowMask )
 {
-    (void) wrappedPhaseMap;
-    (void) unwrappedPhaseMap;
+    int rows = params.height;
+    int cols = params.width;
+    unwrappingParams.width = camSize.width;
+    unwrappingParams.height = camSize.height;
+
+    Mat &wPhaseMap = *(Mat*) wrappedPhaseMap.getObj();
+    Mat &uPhaseMap = *(Mat*) unwrappedPhaseMap.getObj();
+    Mat mask;
+
+    if( shadowMask.empty() )
+    {
+        mask.create(rows, cols, CV_8UC1);
+        mask = Scalar::all(255);
+    }
+    else
+    {
+        Mat &temp = *(Mat*) shadowMask.getObj();
+        temp.copyTo(mask);
+    }
+
+    Ptr<phase_unwrapping::HistogramPhaseUnwrapping> phaseUnwrapping =
+            phase_unwrapping::HistogramPhaseUnwrapping::create(unwrappingParams);
+
+    phaseUnwrapping->unwrapPhaseMap(wPhaseMap, uPhaseMap, mask);
 }
 
 void SinusoidalPatternProfilometry_Impl::findProCamMatches( InputArray projUnwrappedPhaseMap,
@@ -390,7 +487,8 @@ void SinusoidalPatternProfilometry_Impl::computeFtPhaseMap( InputArray inverseFo
         {
             float im = planes[1].at<float>(i, j);
             float re = planes[0].at<float>(i, j);
-            wrappedPhaseMap_.at<float>(i, j) = atan2(im, re);
+            float ratio = im/re;
+            wrappedPhaseMap_.at<float>(i, j) = atan(ratio) * 2;
         }
     }
 }
@@ -544,8 +642,45 @@ void SinusoidalPatternProfilometry_Impl::computePsPhaseMap( InputArrayOfArrays p
                 i2 = pattern_[1].at<float>(i, j);
                 i3 = pattern_[2].at<float>(i, j);
             }
-            wrappedPhaseMap_.at<float>(i, j) = atan2(params.shiftValue * ( i1 - i3 ),
-                                                    ( 2 * i2 - i1 - i3 ));
+            //wrappedPhaseMap_.at<float>(i, j) = atan2(params.shiftValue * ( i1 - i3 ),
+              //                                      ( 2 * i2 - i1 - i3 ));
+            float num = tan(params.shiftValue) * (i3 - i2);
+            float den = 2 * i1 - i2 - i3;
+            float ratio = num/den;
+            wrappedPhaseMap_.at<float>(i, j) = atan(ratio)*2;
+        }
+    }
+}
+
+void SinusoidalPatternProfilometry_Impl::computeFapsPhaseMap( InputArray h,
+                                                              InputArray theta1,
+                                                              InputArray theta2,
+                                                              OutputArray wrappedPhaseMap )
+{
+    Mat &h_ = *(Mat*) h.getObj();
+    Mat &theta1_ = *(Mat*) theta1.getObj();
+    Mat &theta2_ = *(Mat*) theta2.getObj();
+    Mat &wrappedPhaseMap_ = *(Mat*) wrappedPhaseMap.getObj();
+
+    int rows = h_.rows;
+    int cols = h_.cols;
+
+    if( wrappedPhaseMap_.empty() )
+        wrappedPhaseMap_.create(rows, cols, CV_32FC1);
+
+    for( int i = 0; i < rows; ++i )
+    {
+        for( int j = 0; j < cols; ++j )
+        {
+            float num = 1 - cos(theta2_.at<float>(i, j)) +
+                       ( 1 - cos(theta1_.at<float>(i, j) )) * h_.at<float>(i, j);
+
+            float den = sin(theta1_.at<float>(i, j)) * h_.at<float>(i, j) -
+                        sin(theta2_.at<float>(i, j));
+
+            float ratio = num/den;
+            wrappedPhaseMap_.at<float>(i, j) = atan(ratio) * 2;
+            //wrappedPhaseMap_.at<float>(i, j) = atan2(num, den);
         }
     }
 }
@@ -579,10 +714,12 @@ void SinusoidalPatternProfilometry_Impl::computeShadowMask( InputArrayOfArrays p
 }
 
 void SinusoidalPatternProfilometry_Impl::computeDataModulationTerm( InputArrayOfArrays patternImages,
-                                                                    OutputArray dataModulationTerm )
+                                                                    OutputArray dataModulationTerm,
+                                                                    InputArray shadowMask )
 {
     std::vector<Mat> &patternImages_ = *(std::vector<Mat>*) patternImages.getObj();
     Mat &dataModulationTerm_ = *(Mat*) dataModulationTerm.getObj();
+    Mat &shadowMask_ = *(Mat*) shadowMask.getObj();
     int rows = patternImages_[0].rows;
     int cols = patternImages_[0].cols;
     float num = 0;
@@ -591,23 +728,117 @@ void SinusoidalPatternProfilometry_Impl::computeDataModulationTerm( InputArrayOf
     float i2 = 0;
     float i3 = 0;
 
+    Mat dmt(rows, cols, CV_32FC1);
+    Mat threshedDmt;
+
     if( dataModulationTerm_.empty() )
-            dataModulationTerm_.create(rows, cols, CV_32FC1);
+    {
+            dataModulationTerm_.create(rows, cols, CV_8UC1);
+    }
+    if( shadowMask_.empty() )
+    {
+        shadowMask_.create(rows, cols, CV_8U);
+        shadowMask_ = Scalar::all(255);
+    }
+    for( int i = 0; i < rows; ++i )
+    {
+        for( int j = 0; j < cols; ++j )
+        {
+            if( shadowMask_.at<uchar>(i, j) != 0 ){
+                i1 = patternImages_[0].at<uchar>(i, j);
+                i2 = patternImages_[1].at<uchar>(i, j);
+                i3 = patternImages_[2].at<uchar>(i, j);
+
+                num = sqrt(3 * ( i1 - i3 ) * ( i1 - i3 ) + ( 2 * i2 - i1 - i3 ) * ( 2 * i2 - i1 - i3 ));
+                den = i1 + i2 + i3;
+                dmt.at<float>(i, j) = 1 - num / den;
+            }
+            else
+            {
+                dmt.at<float>(i,j) = 0;
+            }
+        }
+    }
+    Mat kernel(3, 3, CV_32F);
+    kernel.at<float>(0, 0) = 1.f/16.f;
+    kernel.at<float>(1, 0) = 2.f/16.f;
+    kernel.at<float>(2, 0) = 1.f/16.f;
+
+    kernel.at<float>(0, 1) = 2.f/16.f;
+    kernel.at<float>(1, 1) = 4.f/16.f;
+    kernel.at<float>(2, 1) = 2.f/16.f;
+
+    kernel.at<float>(0, 2) = 1.f/16.f;
+    kernel.at<float>(1, 2) = 2.f/16.f;
+    kernel.at<float>(2, 2) = 1.f/16.f;
+
+    Point anchor = Point(-1, -1);
+    double delta = 0;
+    int ddepth = -1;
+
+    filter2D(dmt, dmt, ddepth, kernel, anchor, delta, BORDER_DEFAULT);
+
+    threshold(dmt, threshedDmt, 0.4, 1, THRESH_BINARY);
+    threshedDmt.convertTo(dataModulationTerm_, CV_8UC1, 255, 0);
+}
+
+void SinusoidalPatternProfilometry_Impl::extractMarkersLocation( InputArray dataModulationTerm,
+                                                                 std::vector<Point> &markersLocation )
+{
+    Mat &dmt = *(Mat*) dataModulationTerm.getObj();
+    int rows = dmt.rows;
+    int cols = dmt.cols;
+    int halfRegionSize = 6;
 
     for( int i = 0; i < rows; ++i )
     {
         for( int j = 0; j < cols; ++j )
         {
-            i1 = patternImages_[0].at<uchar>(i, j);
-            i2 = patternImages_[1].at<uchar>(i, j);
-            i3 = patternImages_[2].at<uchar>(i, j);
-
-            num = sqrt(3 * ( i1 - i3 ) * ( i1 - i3 ) + ( 2 * i2 - i1 - i3 ) * ( 2 * i2 - i1 - i3 ));
-            den = i1 + i2 + i3;
-
-            dataModulationTerm_.at<float>(i, j) = 1 - num / den;
+            if( dmt.at<uchar>(i,j) != 0 )
+            {
+                bool addToVector = true;
+                Mat roi;
+                for(int k = 0; k < (int)markersLocation.size(); ++k)
+                {
+                    if( markersLocation[k].x - halfRegionSize < i &&
+                        markersLocation[k].x + halfRegionSize > i &&
+                        markersLocation[k].y - halfRegionSize < j &&
+                        markersLocation[k].y + halfRegionSize > j ){
+                        addToVector = false;
+                    }
+                }
+                if(addToVector)
+                {
+                    Point temp(i,j);
+                    markersLocation.push_back(temp);
+                }
+            }
         }
     }
+}
+void SinusoidalPatternProfilometry_Impl::convertToAbsolutePhaseMap( InputArrayOfArrays camPatterns,
+                                                                    InputArray unwrappedProjPhaseMap,
+                                                                    InputArray unwrappedCamPhaseMap,
+                                                                    InputArray shadowMask,
+                                                                    InputArray fundamentalMatrix )
+{
+    std::vector<Mat> &camPatterns_ = *(std::vector<Mat>*) camPatterns.getObj();
+    //Mat &uProjPhaseMap = *(Mat*) unwrappedProjPhaseMap.getObj();
+    //Mat &uCamPhaseMap = *(Mat*) unwrappedCamPhaseMap.getObj();
+    (void) unwrappedCamPhaseMap;
+    (void) unwrappedProjPhaseMap;
+
+    Mat &fundamental = *(Mat*) fundamentalMatrix.getObj();
+
+    Mat camDmt;
+
+    std::vector<Point> markersLocation;
+
+    computeDataModulationTerm(camPatterns_, camDmt, shadowMask);
+
+    std::vector<Vec3f> epilines;
+    computeCorrespondEpilines(params.markersLocation, 2, fundamental, epilines);
+
 }
 Ptr<SinusoidalPattern> SinusoidalPattern::create( const SinusoidalPattern::Params &params )
 {

@@ -595,7 +595,7 @@ void HistogramPhaseUnwrapping_Impl::unwrapHistogram()
                 float invRel1 = pixels[pOneId].getInverseReliability();
                 float invRel2 = pixels[pTwoId].getInverseReliability();
                 // Quality of pixel 2 is better than that of pixel 1 -> pixel 1 is added to group 2
-                if( invRel1 >= invRel2 )
+                if( invRel1 > invRel2 )
                 {
                     int newGroupId = pixels[pTwoId].getGroupId();
                     int newInc = pixels[pTwoId].getIncrement() + currentEdges[j].getIncrement();
@@ -606,7 +606,7 @@ void HistogramPhaseUnwrapping_Impl::unwrapHistogram()
                 else
                 {
                     int newGroupId = pixels[pOneId].getGroupId();
-                    int newInc = pixels[pOneId].getIncrement() + currentEdges[j].getIncrement();
+                    int newInc = pixels[pOneId].getIncrement() - currentEdges[j].getIncrement();
                     pixels[pTwoId].setGroupId(newGroupId);
                     pixels[pTwoId].setIncrement(newInc);
                     lastPixelAddedToGroup[newGroupId] = pTwoId;
@@ -638,7 +638,7 @@ void HistogramPhaseUnwrapping_Impl::unwrapHistogram()
                 int newGroupId = pixels[pOneId].getGroupId();
                 int lastPix = lastPixelAddedToGroup[newGroupId];
                 int newNbrOfPixelsInGroup = pixels[lastPix].getNbrOfPixelsInGroup() + 1;
-                int newInc = pixels[pOneId].getIncrement() + currentEdges[j].getIncrement();
+                int newInc = pixels[pOneId].getIncrement() - currentEdges[j].getIncrement();
 
                 pixels[pTwoId].setGroupId(newGroupId);
                 pixels[pTwoId].setNbrOfPixelsInGroup(newNbrOfPixelsInGroup);
@@ -668,7 +668,6 @@ void HistogramPhaseUnwrapping_Impl::unwrapHistogram()
                 if( nbrOfPixelsInGroupOne < nbrOfPixelsInGroupTwo ||
                    (nbrOfPixelsInGroupOne == nbrOfPixelsInGroupTwo && invRel1 >= invRel2) ) //group p1 added to group p2
                 {
-                    int oldGroupId = pOneGroupId;
                     pixels[pTwoId].setNbrOfPixelsInGroup(totalNbrOfPixels);
                     pixels[pOneId].setNbrOfPixelsInGroup(totalNbrOfPixels);
                     int inc = pixels[pTwoId].getIncrement() + currentEdges[j].getIncrement() -
@@ -677,7 +676,7 @@ void HistogramPhaseUnwrapping_Impl::unwrapHistogram()
 
                     for( int k = 0; k < nbrOfPixels; ++k )
                     {
-                        if( pixels[k].getGroupId() == oldGroupId )
+                        if( pixels[k].getGroupId() == pOneGroupId )
                         {
                             pixels[k].setGroupId(pTwoGroupId);
                             pixels[k].changeIncrement(inc);
@@ -745,7 +744,7 @@ int HistogramPhaseUnwrapping_Impl::findInc( float a, float b )
 {
     float difference;
     int wrapValue;
-    difference = a - b;
+    difference = b - a;
     float pi = static_cast<float>(CV_PI);
     if( difference > pi )
         wrapValue = -1;

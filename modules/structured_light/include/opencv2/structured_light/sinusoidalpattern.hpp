@@ -45,6 +45,8 @@
 #include "opencv2/core.hpp"
 #include "opencv2/imgproc.hpp"
 #include "opencv2/structured_light/structured_light.hpp"
+#include <opencv2/phase_unwrapping.hpp>
+#include <opencv2/calib3d.hpp>
 
 namespace cv {
 namespace structured_light {
@@ -87,6 +89,7 @@ public:
         int nbrOfPixelsBetweenMarkers;
         bool horizontal;
         bool setMarkers;
+        std::vector<Point2f> markersLocation;
     };
     /**
      * @brief Constructor.
@@ -104,7 +107,8 @@ public:
     CV_WRAP
     virtual void computePhaseMap( InputArrayOfArrays patternImages,
                                   OutputArray wrappedPhaseMap,
-                                  OutputArray shadowMask = noArray() ) = 0;
+                                  OutputArray shadowMask = noArray(),
+                                  InputArray fundamental = noArray()) = 0;
     /**
      * @brief Unwrap the wrapped phase map to remove phase ambiguities.
      * @param wrappedPhaseMap The wrapped phase map computed from the pattern.
@@ -112,7 +116,9 @@ public:
      */
     CV_WRAP
     virtual void unwrapPhaseMap( InputArrayOfArrays wrappedPhaseMap,
-                                 OutputArray unwrappedPhaseMap ) = 0;
+                                 OutputArray unwrappedPhaseMap,
+                                 cv::Size camSize,
+                                 InputArray shadowMask = noArray() ) = 0;
     /**
      * @brief Find correspondences between the two devices thanks to unwrapped phase maps.
      * @param projUnwrappedPhaseMap Projector's unwrapped phase map.
@@ -122,6 +128,12 @@ public:
     CV_WRAP
     virtual void findProCamMatches( InputArray projUnwrappedPhaseMap, InputArray camUnwrappedPhaseMap,
                                     OutputArrayOfArrays matches ) = 0;
+
+    CV_WRAP
+    virtual void computeDataModulationTerm( InputArrayOfArrays patternImages,
+                                            OutputArray dataModulationTerm,
+                                            InputArray shadowMask ) = 0;
+
 };
 //! @}
 }

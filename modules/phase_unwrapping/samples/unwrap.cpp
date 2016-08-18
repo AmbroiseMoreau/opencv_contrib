@@ -55,7 +55,8 @@ using namespace std;
 static const char* keys =
 {
     "{@inputPath | | Path of the wrapped phase map saved in a yaml file }"
-    "{@outputName | | Path of the unwrapped phase map to be saved in a yaml file }"
+    "{@outputUnwrappedName | | Path of the unwrapped phase map to be saved in a yaml file and as an 8 bit png}"
+    "{@outputWrappedName | | Path to save the wrapped phase map as an 8 bit png image}"
 };
 
 static void help()
@@ -65,7 +66,7 @@ static void help()
             " The mat name in the file should be \"phaseValue\". The result is saved in a yaml file"
             " too. Two images (wrapped.png and output_name.png) are also created"
             " for visualization purpose."
-            "\nTo call: ./example_phase_unwrapping_unwrap <input_path> <output_name>\n"
+            "\nTo call: ./example_phase_unwrapping_unwrap <input_path> <output_unwrapped_name> <output_wrapped_name> \n"
          << endl;
 }
 int main(int argc, char **argv)
@@ -74,22 +75,22 @@ int main(int argc, char **argv)
 
     CommandLineParser parser(argc, argv, keys);
     String inputPath = parser.get<String>(0);
-    String outputName = parser.get<String>(1);
+    String outputUnwrappedName = parser.get<String>(1);
+    String outputWrappedName = parser.get<String>(2);
 
-    if( inputPath.empty() || outputName.empty() )
+    if( inputPath.empty() || outputUnwrappedName.empty() )
     {
         help();
         return -1;
     }
     FileStorage fsInput(inputPath, FileStorage::READ);
-    FileStorage fsOutput(outputName + ".yml", FileStorage::WRITE);
+    FileStorage fsOutput(outputUnwrappedName + ".yml", FileStorage::WRITE);
 
     Mat wPhaseMap;
     Mat uPhaseMap;
     Mat reliabilities;
     fsInput["phaseValues"] >> wPhaseMap;
     fsInput.release();
-
     params.width = wPhaseMap.cols;
     params.height = wPhaseMap.rows;
 
@@ -101,16 +102,21 @@ int main(int argc, char **argv)
 
     phaseUnwrapping->getInverseReliabilityMap(reliabilities);
 
-    Mat uPhaseMap8, wPhaseMap8;
+    Mat uPhaseMap8, wPhaseMap8, reliabilities8;
     wPhaseMap.convertTo(wPhaseMap8, CV_8U, 255, 128);
     uPhaseMap.convertTo(uPhaseMap8, CV_8U, 1, 128);
+    reliabilities.convertTo(reliabilities8, CV_8U, 255,128);
 
     imshow("reliabilities", reliabilities);
     imshow("wrapped phase map", wPhaseMap8);
     imshow("unwrapped phase map", uPhaseMap8);
 
-    imwrite("wrapped.png", wPhaseMap8);
-    imwrite(outputName + ".png", uPhaseMap8);
+    if( !outputWrappedName.empty() )
+    {
+        imwrite(outputWrappedName + ".png", wPhaseMap8);
+    }
+    imwrite(outputUnwrappedName + ".png", uPhaseMap8);
+    imwrite("reliabilities.png", reliabilities8);
 
     bool loop = true;
     while( loop )
