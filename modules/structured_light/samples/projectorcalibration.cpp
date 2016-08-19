@@ -54,7 +54,7 @@ using namespace cv;
 
 static const char* keys =
 {
-    "{@camCalibPath | | Path of camera calibration file}"
+    "{@camSettingsPath | | Path of camera calibration file}"
     "{@projSettingsPath | | Path of projector settings}"
     "{@patternPath | | Path to checkerboard pattern}"
     "{@outputName | | Base name for the calibration data}"
@@ -62,9 +62,13 @@ static const char* keys =
 
 static void help()
 {
-    cout << endl;
+    cout << "\nThis example calibrates a camera and a projector" << endl;
+    cout << "To call: ./example_structured_light_projectorcalibration <cam_settings_path> "
+            " <proj_settings_path> <chessboard_path> <calibration_basename>"
+            " cam settings are parameters about the chessboard that needs to be detected to"
+            " calibrate the camera and proj setting are the same kind of parameters about the chessboard"
+            " that needs to be detected to calibrate the projector" << endl;
 }
-
 enum calibrationPattern{ CHESSBOARD, CIRCLES_GRID, ASYMETRIC_CIRCLES_GRID };
 
 struct Settings
@@ -132,7 +136,7 @@ int main( int argc, char **argv )
     String patternPath = parser.get<String>(2);
     String outputName = parser.get<String>(3);
 
-    if( camSettingsPath.empty() || projSettingsPath.empty() || patternPath.empty() ){
+    if( camSettingsPath.empty() || projSettingsPath.empty() || patternPath.empty() || outputName.empty() ){
         help();
         return -1;
     }
@@ -215,7 +219,6 @@ int main( int argc, char **argv )
                         cout << "saving pattern #" << nbrOfValidFrames << " for calibration" << endl;
                         ostringstream name;
                         name << nbrOfValidFrames;
-                        //imwrite("capture1808_" + name.str() + ".png", color);
                         nbrOfValidFrames += 1;
 
                         imagePointsCam.push_back(camPointBuf);
@@ -267,7 +270,7 @@ int main( int argc, char **argv )
         }
     }
 
-    saveCalibrationData("calibrationPoints1808", T1, T2, projInCam, projInProj, projInCamN, projInProjN);
+    saveCalibrationData(outputName + "_points.yml", T1, T2, projInCam, projInProj, projInCamN, projInProjN);
 
     float rms = calibrate(objectPointsCam, imagePointsCam, cameraMatrix, distCoeffs,
                           rVecs, tVecs, camSettings.imageSize);
